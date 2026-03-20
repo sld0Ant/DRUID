@@ -28,6 +28,35 @@ DRUID gives the domain a single, machine-readable representation:
 
 One JSON file for structure. One markdown file per resource for behavior. Round-trip between code and spec.
 
+## Why LLMs and DRUID are a natural fit
+
+LLMs are good at transforming structured descriptions into code. They are bad at inventing structure from vague requirements and at keeping scattered files consistent.
+
+DRUID gives the LLM exactly what it needs at each step:
+
+**Step 1 → 2 (human words → behavioral spec).** The LLM's strongest skill: taking fuzzy natural language and formalizing it. The five-section format (contracts, auth table, lifecycle, scenarios, side effects) channels the output into structured conventions the LLM already understands — Design by Contract, decision tables, Given-When-Then. It doesn't need to guess the format.
+
+**Step 2 → 3 (behavioral spec → IR).** Mechanical extraction. Nouns → resources, attributes → typed fields, "belongs to" → relations, "draft → published" → transitions. No creativity needed — the LLM follows rules.
+
+**Step 3 → 4 (IR → code).** The generator does this. Zero LLM involvement. Deterministic.
+
+**Step 4 → 5 (generated skeleton → business logic).** The LLM reads a behavioral spec and writes code into a known structure. It doesn't decide WHERE to put the code (the layer architecture dictates that). It doesn't decide WHAT to write (the spec dictates that). It only translates spec → code within a clear boundary:
+
+| Spec says | LLM writes in |
+|-----------|--------------|
+| `invariant: rating in 1..5` | Entity validation |
+| `pre(publish): has lessons` | Service guard |
+| `admin: ✓, student: ✗` | Endpoint auth config |
+| `@on(enroll): notify student` | Service side effect |
+
+Every decision is local. The LLM never needs to hold the whole system in context — one resource, one spec, one file at a time.
+
+**Why this beats "generate everything from a prompt":**
+
+A single prompt like "build me a course platform" forces the LLM to invent structure AND behavior simultaneously, with no checkpoint between them. It hallucinates fields, forgets constraints, creates inconsistent relations.
+
+DRUID splits the problem into verifiable steps. After step 2 you can review specs. After step 3 you can validate IR (it's JSON — schema-checkable). After step 4 you have working CRUD to test. After step 5 you have business logic that traces back to a spec line. Every artifact is auditable.
+
 ## What DRUID is
 
 - **IR Specification** — a JSON format for describing domain resources: attributes, relations, state machines, constraints, custom actions
