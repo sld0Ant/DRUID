@@ -6,6 +6,28 @@ A specification for AI-native, domain-driven API development.
 
 DRUID defines a language-agnostic format for describing domain resources (IR) and a methodology for turning plain-language domain descriptions into working APIs through behavioral specifications.
 
+## Why DRUID exists
+
+Existing tools describe parts of a system: OpenAPI describes HTTP endpoints, Prisma describes database schema, JSON Schema describes data shapes. None of them describe the **domain** — the resources, their lifecycle, their relations, their constraints, and who can do what with them.
+
+When an AI agent builds an API, it needs all of this in one place. Today it scrapes information from scattered files: ORM models, route configs, policy classes, migration files. If any are missing or stale, the agent hallucinates.
+
+DRUID gives the domain a single, machine-readable representation:
+
+| What | Where today | Where in DRUID |
+|------|------------|----------------|
+| Resource attributes & types | ORM model files | IR `attributes` |
+| API routes & methods | Router config | IR `operations` |
+| DB relations | ORM associations | IR `relations` |
+| State machines | Scattered across models/services | IR `transitions` |
+| Unique constraints | Migration files | IR `unique` |
+| Custom endpoints | Hand-wired routes | IR `actions` |
+| Authorization rules | Policy files / middleware | Behavioral spec (decision table) |
+| Business rules | Service / model code | Behavioral spec (contracts) |
+| Lifecycle guards | Callbacks / before_actions | Behavioral spec (pre/postconditions) |
+
+One JSON file for structure. One markdown file per resource for behavior. Round-trip between code and spec.
+
 ## What DRUID is
 
 - **IR Specification** — a JSON format for describing domain resources: attributes, relations, state machines, constraints, custom actions
