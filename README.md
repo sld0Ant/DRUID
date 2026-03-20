@@ -156,8 +156,8 @@ DRUID IR is a formal encoding of REST's uniform interface. `attributes` = repres
 DRUID IR is bidirectional:
 
 ```
-ir.json  →  code (generate)
-code     →  ir.json (extract)
+ir.json  →  code      (generate)
+code     →  ir.json   (extract)
 ```
 
 For any DRUID-compliant implementation:
@@ -170,32 +170,148 @@ generate(ir.json)     # IR → application again
 
 The two generated applications are structurally identical. This is the **round-trip guarantee**.
 
-### Why round-trip matters
+### What is preserved in round-trip
 
-**Living documentation.** IR is never stale. Extract it from the running code at any point — it always reflects the current state.
+| IR field | Generate (IR → code) | Extract (code → IR) |
+|----------|---------------------|---------------------|
+| `attributes` | Entity typed fields | Read from entity class attribute definitions |
+| `default` | Entity `attribute :x, :string, default: "draft"` | Read from entity `_default_attributes` |
+| `relations` | Record associations + Entity FK attrs | Read from ORM `reflect_on_all_associations` |
+| `transitions` | Entity `transitions` DSL | Read from entity `transitions_config` |
+| `operations` | HTTP routes | Reconstructed from plural name (standard CRUD) |
+| `validators` | Entity `validates` declarations | Read from entity `validators` |
+| `collection` | Endpoint sort/filter/search/per_page config | Read from endpoint class attributes |
+| `permit` | Endpoint permitted_params | Read from endpoint class attribute |
 
-**Cross-stack portability.** Extract IR from a Rails app, generate a NestJS app from the same IR. The domain structure transfers. Business logic (behavioral specs) transfers as-is — it's markdown, not code.
+Fields NOT round-tripped (input-only, used during generation):
+- `unique` — DB indexes are infrastructure, not readable from domain layer
+- `actions` — custom actions require service implementation, not introspectable
+
+This means: `extract → generate → extract` always produces the same IR. Manual changes to the code (adding a field to entity, adding a relation to record) are captured on the next extract.
+
+### What round-trip enables
+
+**Living documentation.** IR is never stale. Extract it from the running code at any point — it reflects the current state of the domain. If someone added a field by hand, the next extract picks it up.
+
+**Design-first or code-first — both work:**
 
 ```
-Rails app → extract → ir.json → generate → NestJS app
-                        ↓
-                   same ir.json → generate → FastAPI app
+Design-first:  write ir.json → generate code → add logic → extract ir.json (verify)
+Code-first:    write code manually → extract ir.json → use IR for everything else
 ```
 
-**External system integration.** Any system that reads JSON can consume IR:
-- API gateways read IR to configure routes and rate limits
-- Frontend generators read IR to produce TypeScript types and API clients
-- Documentation tools read IR to emit OpenAPI, AsyncAPI, or custom docs
-- Testing tools read IR to generate integration test suites
-- Monitoring systems read IR to set up per-resource dashboards
-
-No adapter code. No manual sync. Read `ir.json` — you know the full domain structure.
-
-**Schema evolution.** Change the IR, re-generate, diff. The IR is the single source of truth for structure. Adding a field, renaming a relation, introducing a new transition — all visible as a JSON diff before any code changes.
+**Cross-stack portability.** Extract IR from one implementation, generate another. The domain structure transfers exactly. Business logic (behavioral specs) transfers as-is — it's markdown, not code.
 
 ```
-v1/ir.json  →  v2/ir.json  →  diff = exactly what changed in the domain
+Rails app  → extract → ir.json → generate → NestJS app
+                         ↓
+                    same ir.json → generate → FastAPI app
+                         ↓
+                    same ir.json → generate → Go app
 ```
+
+The behavioral specs work across all implementations — they describe WHAT should happen, not HOW in a specific language.
+
+**Schema evolution with auditable diff.**
+
+```
+v1/ir.json  →  v2/ir.json  →  JSON diff = exactly what changed in the domain
+```
+
+Adding a field, renaming a relation, introducing a new transition — visible as structured diff before any code changes. Review the IR diff, approve, regenerate.
+
+## Emitting specifications from IR
+
+IR is a superset of what most API specification formats need. A DRUID implementation can emit multiple output formats from a single `ir.json`:
+
+```
+                    ┌──────────────────┐
+                    │     ir.json      │
+                    │   (DRUID IR)     │
+                    └────────┬─────────┘
+                             │
+          ┌──────────────────┼──────────────────────┐
+          │                  │                      │
+          ▼                  ▼                      ▼
+     Emit: code         Emit: docs            Emit: clients
+          │                  │                      │
+          ▼                  ▼                      ▼
+   Entity, Service,    OpenAPI 3.x            TypeScript types
+   Repository,         JSON Schema            API client (fetch)
+   Endpoint,           AsyncAPI               Python SDK
+   Migration           Markdown docs          Swift models
+```
+
+### What each emitter reads from IR
+
+**OpenAPI emitter:**
+
+| IR field | OpenAPI output |
+|----------|---------------|
+| `name`, `plural`, `path` | Path objects (`/courses`, `/courses/{id}`) |
+| `attributes` + `type` | Schema component with typed properties |
+| `nullable` | `nullable: true` on property |
+| `readonly` | Separate request/response schemas (readonly excluded from request) |
+| `permit` | Request body properties |
+| `operations` | Path items with HTTP methods |
+| `validators` | `required` array, `minLength`, `pattern` etc. |
+| `relations` (belongs_to) | `$ref` in schema, FK in properties |
+| `transitions` | Additional POST paths (`/courses/{id}/publish`) |
+| `actions` | Additional paths with custom methods |
+| `collection` | Query parameters (`sort`, `filter[status]`, `search`, `page`, `per_page`) |
+| `default` | `default` on schema property |
+
+One IR → complete OpenAPI 3.x spec, no manual writing.
+
+**TypeScript emitter:**
+
+| IR field | TypeScript output |
+|----------|------------------|
+| `name` | `interface Course { ... }` |
+| `attributes` + `type` | Typed properties (`title: string`, `price: number`) |
+| `nullable` | `title: string \| null` |
+| `readonly` | `readonly id: number` |
+| `permit` | `type CourseCreateParams = Pick<Course, 'title' \| 'status'>` |
+| `operations` | Typed fetch functions (`getCourse(id): Promise<Course>`) |
+| `transitions` | `publishCourse(id): Promise<Course>` |
+| `actions` | `markReadNotification(id): Promise<Notification>` |
+| `collection` | `listCourses(params: CourseListParams): Promise<PaginatedResponse<Course>>` |
+| `relations` | Nested type references |
+
+One IR → full TypeScript SDK with types, API client, and request/response types.
+
+**JSON Schema emitter:**
+
+| IR field | JSON Schema output |
+|----------|-------------------|
+| `attributes` | `properties` with `type` mapping |
+| `nullable` | Combined type: `{"type": ["string", "null"]}` |
+| `default` | `default` keyword |
+| `validators` (presence) | `required` array |
+| `unique` | Not expressible in JSON Schema (DB-level concern) |
+
+**Other possible emitters:**
+- **Markdown docs** — human-readable API reference from IR
+- **Postman collection** — importable request set for every operation + transition
+- **Database schema (SQL DDL)** — `CREATE TABLE` from attributes + relations + unique
+- **GraphQL schema** — types + queries + mutations from IR (experimental)
+- **AsyncAPI** — if events are added to IR in a future version
+- **Test scaffolds** — one integration test per operation, per resource
+- **Seed data** — fixture generators from attribute types and constraints
+
+### The key insight
+
+IR is richer than any single output format. OpenAPI can't express state machines. JSON Schema can't express operations. TypeScript types can't express authorization. DRUID IR holds all of these — and each emitter takes what it needs.
+
+```
+ir.json (everything) → OpenAPI (HTTP surface)
+                     → TypeScript (type surface)
+                     → JSON Schema (data surface)
+                     → SQL DDL (storage surface)
+                     → Test suite (behavior surface)
+```
+
+This is why IR is not "yet another OpenAPI alternative" — it's a layer above, from which OpenAPI (and others) are derived.
 
 ## Scaling and workflow
 
