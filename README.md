@@ -57,6 +57,32 @@ A single prompt like "build me a course platform" forces the LLM to invent struc
 
 DRUID splits the problem into verifiable steps. After step 2 you can review specs. After step 3 you can validate IR (it's JSON — schema-checkable). After step 4 you have working CRUD to test. After step 5 you have business logic that traces back to a spec line. Every artifact is auditable.
 
+## REST architectural constraints
+
+Roy Fielding's dissertation (2000) defines REST through six constraints. DRUID IR maps to each of them:
+
+**1. Client-Server.** IR defines the server-side domain. The client consumes it through generated endpoints. Separation is structural — IR never describes UI.
+
+**2. Stateless.** Each IR operation is self-contained: method + path + permitted params. No session state in IR. Every request carries all needed context (auth headers, resource params).
+
+**3. Cacheable.** IR `collection` config defines per-resource caching policy. Implementations generate `Cache-Control` headers from it. The client knows what's cacheable from the response — DRUID makes the server-side policy explicit.
+
+**4. Uniform Interface.** This is where DRUID is most precise. Fielding's uniform interface has four sub-constraints:
+
+- **Resource identification.** Every IR resource has `name`, `plural`, `path`. A resource is identified by `/<plural>/{id}`. This is the URI.
+
+- **Resource manipulation through representations.** IR `attributes` define the representation. `permit` defines which fields are writable. `readonly` marks server-managed fields. The client manipulates the resource by sending a representation (JSON body with permitted fields).
+
+- **Self-descriptive messages.** IR `operations` map each action to an HTTP method + path. `validators` declare constraints. The response carries enough information to understand itself — JSON with typed fields matching IR attributes.
+
+- **Hypermedia as the engine of application state (HATEOAS).** IR `transitions` declare which state changes are possible. IR `relations` declare links to related resources. Implementations generate `_links` in every response: `self`, relation hrefs, and available transition actions (conditional on current state). The client discovers what it can do next from the response, not from out-of-band knowledge.
+
+**5. Layered System.** DRUID's four DDD layers (endpoint → service → entity → repository) are a server-side layered system. Each layer only knows about the layer below it. IR doesn't prescribe client-side layers.
+
+**6. Code on Demand (optional).** Not applicable to JSON APIs. DRUID doesn't address this constraint.
+
+DRUID IR is a formal encoding of REST's uniform interface. `attributes` = representation, `operations` = methods, `relations` = links, `transitions` = hypermedia controls, `collection` = cache policy. The five applicable Fielding constraints are structurally guaranteed by a valid IR file.
+
 ## What DRUID is
 
 - **IR Specification** — a JSON format for describing domain resources: attributes, relations, state machines, constraints, custom actions
