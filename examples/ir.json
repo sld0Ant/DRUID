@@ -1,0 +1,158 @@
+{
+  "$schema": "druid/1.2",
+  "resources": [
+    {
+      "name": "Category",
+      "plural": "categories",
+      "path": "/categories",
+      "attributes": {
+        "id":         { "type": "integer",  "nullable": false, "readonly": true },
+        "name":       { "type": "string",   "nullable": false, "readonly": false },
+        "slug":       { "type": "string",   "nullable": false, "readonly": false },
+        "parent_id":  { "type": "integer",  "nullable": true,  "readonly": false },
+        "position":   { "type": "integer",  "nullable": false, "readonly": false, "default": 0 },
+        "created_at": { "type": "datetime", "nullable": false, "readonly": true },
+        "updated_at": { "type": "datetime", "nullable": false, "readonly": true }
+      },
+      "permit": ["name", "slug", "parent_id", "position"],
+      "operations": [
+        { "action": "index",   "method": "GET",    "path": "/categories" },
+        { "action": "show",    "method": "GET",    "path": "/categories/{id}" },
+        { "action": "create",  "method": "POST",   "path": "/categories" },
+        { "action": "update",  "method": "PATCH",  "path": "/categories/{id}" },
+        { "action": "destroy", "method": "DELETE",  "path": "/categories/{id}" }
+      ],
+      "validators": [
+        { "type": "presence", "fields": ["name", "slug"] }
+      ],
+      "relations": {
+        "parent": { "kind": "belongs_to", "resource": "Category", "required": false }
+      },
+      "collection": {
+        "sort": ["position", "name"],
+        "filter": ["parent_id"],
+        "per_page": 50
+      },
+      "unique": ["slug"]
+    },
+    {
+      "name": "Author",
+      "plural": "authors",
+      "path": "/authors",
+      "attributes": {
+        "id":         { "type": "integer",  "nullable": false, "readonly": true },
+        "name":       { "type": "string",   "nullable": false, "readonly": false },
+        "email":      { "type": "string",   "nullable": false, "readonly": false },
+        "bio":        { "type": "text",     "nullable": true,  "readonly": false },
+        "active":     { "type": "boolean",  "nullable": false, "readonly": false, "default": true },
+        "created_at": { "type": "datetime", "nullable": false, "readonly": true },
+        "updated_at": { "type": "datetime", "nullable": false, "readonly": true }
+      },
+      "permit": ["name", "email", "bio", "active"],
+      "operations": [
+        { "action": "index",   "method": "GET",    "path": "/authors" },
+        { "action": "show",    "method": "GET",    "path": "/authors/{id}" },
+        { "action": "create",  "method": "POST",   "path": "/authors" },
+        { "action": "update",  "method": "PATCH",  "path": "/authors/{id}" },
+        { "action": "destroy", "method": "DELETE",  "path": "/authors/{id}" }
+      ],
+      "validators": [
+        { "type": "presence", "fields": ["name", "email"] }
+      ],
+      "collection": {
+        "sort": ["name", "created_at"],
+        "filter": ["active"],
+        "search": ["name", "email"],
+        "per_page": 20
+      }
+    },
+    {
+      "name": "Article",
+      "plural": "articles",
+      "path": "/articles",
+      "attributes": {
+        "id":            { "type": "integer",  "nullable": false, "readonly": true },
+        "author_id":     { "type": "integer",  "nullable": false, "readonly": false },
+        "category_id":   { "type": "integer",  "nullable": true,  "readonly": false },
+        "title":         { "type": "string",   "nullable": false, "readonly": false },
+        "slug":          { "type": "string",   "nullable": false, "readonly": false },
+        "body":          { "type": "text",     "nullable": true,  "readonly": false },
+        "status":        { "type": "string",   "nullable": false, "readonly": false, "default": "draft" },
+        "views_count":   { "type": "integer",  "nullable": false, "readonly": true,  "default": 0 },
+        "published_at":  { "type": "datetime", "nullable": true,  "readonly": true },
+        "created_at":    { "type": "datetime", "nullable": false, "readonly": true },
+        "updated_at":    { "type": "datetime", "nullable": false, "readonly": true }
+      },
+      "permit": ["author_id", "category_id", "title", "slug", "body"],
+      "operations": [
+        { "action": "index",   "method": "GET",    "path": "/articles" },
+        { "action": "show",    "method": "GET",    "path": "/articles/{id}" },
+        { "action": "create",  "method": "POST",   "path": "/articles" },
+        { "action": "update",  "method": "PATCH",  "path": "/articles/{id}" },
+        { "action": "destroy", "method": "DELETE",  "path": "/articles/{id}" }
+      ],
+      "validators": [
+        { "type": "presence", "fields": ["title"] }
+      ],
+      "relations": {
+        "author":   { "kind": "belongs_to", "resource": "Author", "required": true },
+        "category": { "kind": "belongs_to", "resource": "Category", "required": false }
+      },
+      "collection": {
+        "sort": ["title", "created_at", "views_count"],
+        "filter": ["status", "author_id", "category_id"],
+        "search": ["title", "body"],
+        "per_page": 20
+      },
+      "transitions": {
+        "field": "status",
+        "events": {
+          "publish": { "from": "draft", "to": "published" },
+          "archive": { "from": ["draft", "published"], "to": "archived" }
+        }
+      },
+      "unique": ["slug"],
+      "actions": [
+        { "name": "feature", "method": "PATCH", "on": "member" }
+      ]
+    },
+    {
+      "name": "Comment",
+      "plural": "comments",
+      "path": "/comments",
+      "attributes": {
+        "id":         { "type": "integer",  "nullable": false, "readonly": true },
+        "article_id": { "type": "integer",  "nullable": false, "readonly": false },
+        "author_id":  { "type": "integer",  "nullable": false, "readonly": false },
+        "body":       { "type": "text",     "nullable": false, "readonly": false },
+        "rating":     { "type": "integer",  "nullable": true,  "readonly": false },
+        "created_at": { "type": "datetime", "nullable": false, "readonly": true },
+        "updated_at": { "type": "datetime", "nullable": false, "readonly": true }
+      },
+      "permit": ["article_id", "author_id", "body", "rating"],
+      "operations": [
+        { "action": "index",  "method": "GET",    "path": "/comments" },
+        { "action": "show",   "method": "GET",    "path": "/comments/{id}" },
+        { "action": "create", "method": "POST",   "path": "/comments" },
+        { "action": "destroy","method": "DELETE",  "path": "/comments/{id}" }
+      ],
+      "validators": [
+        { "type": "presence", "fields": ["body"] }
+      ],
+      "relations": {
+        "article": { "kind": "belongs_to", "resource": "Article", "required": true },
+        "author":  { "kind": "belongs_to", "resource": "Author",  "required": true }
+      },
+      "collection": {
+        "sort": ["created_at", "rating"],
+        "filter": ["article_id", "author_id"],
+        "per_page": 25
+      },
+      "unique": [["article_id", "author_id"]],
+      "actions": [
+        { "name": "flag", "method": "POST", "on": "member" },
+        { "name": "bulk_delete", "method": "DELETE", "on": "collection" }
+      ]
+    }
+  ]
+}

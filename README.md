@@ -109,6 +109,10 @@ DRUID IR is a formal encoding of REST's uniform interface. `attributes` = repres
 - [Layer Mapping](implementors/layer-mapping.md) — IR concepts → DDD architecture layers
 - [Type Mapping](implementors/type-mapping.md) — IR types → language types
 
+### Examples
+- [IR example](examples/ir.json) — 4-resource IR with full feature coverage (28/28 IR features)
+- [Behavioral spec example](examples/behavior/course.md) — Course resource with all 5 sections
+
 ### Implementations
 - [Rails](implementations/rails/) — DDD fork of Ruby on Rails ([sld0Ant/rails](https://github.com/sld0Ant/rails))
 
